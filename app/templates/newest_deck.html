@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en">
+  <body>
+    <h1>Newest Deck</h1>
+    {% if deck %}
+      <p><strong>{{ deck.name }}</strong></p>
+      {% if deck.description %}
+        <p>{{ deck.description }}</p>
+      {% endif %}
+    {% else %}
+      <p>No decks found.</p>
+    {% endif %}
+  </body>
+</html>
