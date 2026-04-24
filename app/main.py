@@ -47,3 +47,17 @@ def newest_deck(request: Request):
         ).fetchone()
 
     return render(request, "newest_deck.html", deck=deck)
+
+@app.get("/tags")
+def list_tags(request: Request):
+    with get_connection() as conn:
+        # The SQL query: Select all columns, order by date (newest first)
+        tags = conn.execute(
+            """
+            SELECT name, created_at
+            FROM tags
+            ORDER BY created_at DESC
+            """
+        ).fetchall()
+
+    return render(request, "tags.html", tags=tags)
