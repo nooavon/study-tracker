@@ -92,3 +92,23 @@ def delete_tag(tag_id: int):
         conn.execute(t"DELETE FROM tags WHERE id = {tag_id}")
 
     return RedirectResponse("/tags", status_code=303)
+
+@app.get("/tags/{tag_id}/edit")
+def show_edit_tag(request: Request, tag_id: int):
+    with get_connection() as conn:
+        tag = conn.execute(
+            t"SELECT id, name FROM tags WHERE id = {tag_id}"
+        ).fetchone()
+
+    return render(request, "tag_edit.html", tag=tag)
+
+@app.post("/tags/{tag_id}/edit")
+def update_tag(tag_id: int, name: str = Form(...)):
+    with get_connection() as conn:
+        conn.execute(t"""
+            UPDATE tags
+            SET name = {name}
+            WHERE id = {tag_id}
+            """)
+
+    return RedirectResponse("/tags", status_code=303)
