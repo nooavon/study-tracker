@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Study Tracker</title>
+  </head>
+  <body>
+    <h1>Study Tracker</h1>
+    <h2>Newest Tag</h2>
+
+    {% if tag %}
+      <p><strong>{{ tag.name }}</strong></p>
+    {% else %}
+      <p>No tags found.</p>
+    {% endif %}
+  </body>
+</html>

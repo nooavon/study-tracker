@@ -56,8 +56,22 @@ def list_tags(request: Request):
             """
             SELECT name, created_at
             FROM tags
-            ORDER BY created_at DESC
+            ORDER BY name
             """
         ).fetchall()
 
     return render(request, "tags.html", tags=tags)
+
+@app.get("/tags/newest")
+def newest_tag(request: Request):
+    with get_connection() as conn:
+        tag = conn.execute(
+            """
+            SELECT id, name
+            FROM tags
+            ORDER BY created_at DESC, id DESC
+            LIMIT 1
+            """
+        ).fetchone()
+
+    return render(request, "newest_tag.html", tag=tag)
