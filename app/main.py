@@ -52,10 +52,9 @@ def newest_deck(request: Request):
 @app.get("/tags")
 def list_tags(request: Request):
     with get_connection() as conn:
-        # The SQL query: Select all columns, order by date (newest first)
         tags = conn.execute(
             """
-            SELECT name, created_at
+            SELECT id, name, created_at
             FROM tags
             ORDER BY name
             """
@@ -84,5 +83,12 @@ def create_tag(name: str = Form(...)):
             INSERT INTO tags (name)
             VALUES ({name})
             """)
+
+    return RedirectResponse("/tags", status_code=303)
+
+@app.post("/tags/{tag_id}/delete")
+def delete_tag(tag_id: int):
+    with get_connection() as conn:
+        conn.execute(t"DELETE FROM tags WHERE id = {tag_id}")
 
     return RedirectResponse("/tags", status_code=303)
