@@ -13,5 +13,13 @@
         <li>{{ tag.name }}</li>
       {% endfor %}
     </ul>
+
+    <h2>Create a Tag</h2>
+    <form method="post" action="/tags">
+      <label for="name">Tag Name</label>
+      <input id="name" name="name" type="text" />
+
+      <button type="submit">Create</button>
+    </form>
   </body>
 </html>

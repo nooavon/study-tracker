@@ -1,4 +1,5 @@
-from fastapi import FastAPI, Request
+#imports
+from fastapi import FastAPI, Request, Form
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 
@@ -75,3 +76,13 @@ def newest_tag(request: Request):
         ).fetchone()
 
     return render(request, "newest_tag.html", tag=tag)
+
+@app.post("/tags")
+def create_tag(name: str = Form(...)):
+    with get_connection() as conn:
+        conn.execute(t"""
+            INSERT INTO tags (name)
+            VALUES ({name})
+            """)
+
+    return RedirectResponse("/tags", status_code=303)
