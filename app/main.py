@@ -1,4 +1,4 @@
-#imports
+from .queries.tags import fetch_all_tags, fetch_newest_tag, fetch_tag_by_id, insert_tag, update_tag, delete_tag
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -6,8 +6,8 @@ from fastapi.templating import Jinja2Templates
 from .db import get_connection
 
 app = FastAPI()
-templates = Jinja2Templates(directory="app/templates")
 
+templates = Jinja2Templates(directory="app/templates")
 
 def render(request: Request, template_name: str, **context):
     return templates.TemplateResponse(
@@ -26,89 +26,108 @@ def index():
 def list_decks(request: Request):
     with get_connection() as conn:
         decks = conn.execute(
-            """
-            SELECT id, name, description
-            FROM decks
-            ORDER BY name
-            """
+            "SELECT id, name, description FROM decks ORDER BY name"
         ).fetchall()
-
     return render(request, "decks.html", decks=decks)
+
+
+@app.post("/decks")
+def create_deck(name: str = Form(...), description: str = Form(None)):
+    with get_connection() as conn:
+        conn.execute(
+            "INSERT INTO decks (name, description) VALUES (%s, %s)",
+            (name, description),
+        )
+    return RedirectResponse("/decks", status_code=303)
+
+
+@app.post("/decks/{deck_id}/delete")
+def delete_deck(deck_id: int):
+    with get_connection() as conn:
+        conn.execute("DELETE FROM decks WHERE id = %s", (deck_id,))
+    return RedirectResponse("/decks", status_code=303)
+
 
 @app.get("/decks/newest")
 def newest_deck(request: Request):
     with get_connection() as conn:
         deck = conn.execute(
-            """
-            SELECT id, name, description
-            FROM decks
-            ORDER BY id DESC
-            LIMIT 1;
-            """
+            "SELECT id, name, description FROM decks ORDER BY id DESC LIMIT 1"
         ).fetchone()
-
     return render(request, "newest_deck.html", deck=deck)
 
-@app.get("/tags")
-def list_tags(request: Request):
-    with get_connection() as conn:
-        tags = conn.execute(
-            """
-            SELECT id, name, created_at
-            FROM tags
-            ORDER BY name
-            """
-        ).fetchall()
 
+@app.get("/decks/{deck_id}")
+def get_deck(request: Request, deck_id: int):
+    with get_connection() as conn:
+        deck = conn.execute("SELECT * FROM decks WHERE id = %s", (deck_id,)).fetchone()
+        cards = conn.execute(
+            "SELECT * FROM cards WHERE deck_id = %s ORDER BY created_at ASC",
+            (deck_id,)
+        ).fetchall()
+    return render(request, "deck_details.html", deck=deck, cards=cards)
+
+
+@app.post("/decks/{deck_id}/cards")
+def create_card(deck_id: int, front: str = Form(...), back: str = Form(...)):
+    with get_connection() as conn:
+        conn.execute(
+            "INSERT INTO cards (deck_id, front, back) VALUES (%s, %s, %s)",
+            (deck_id, front, back),
+        )
+    return RedirectResponse(f"/decks/{deck_id}", status_code=303)
+
+
+@app.get("/decks/{deck_id}/edit")
+def edit_deck_route(request: Request, deck_id: int):
+    with get_connection() as conn:
+        deck = conn.execute(
+            "SELECT id, name, description FROM decks WHERE id = %s", 
+            (deck_id,)
+        ).fetchone()
+    return render(request, "deck_edit.html", deck=deck)
+
+@app.post("/decks/{deck_id}/edit")
+def update_deck_route(deck_id: int, name: str = Form(...), description: str = Form(None)):
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE decks SET name = %s, description = %s WHERE id = %s",
+            (name, description, deck_id)
+        )
+    return RedirectResponse("/decks", status_code=303)
+
+@app.get("/tags")
+def list_tags_route(request: Request): 
+    with get_connection() as conn:
+        tags = fetch_all_tags(conn)
     return render(request, "tags.html", tags=tags)
 
 @app.get("/tags/newest")
-def newest_tag(request: Request):
+def newest_tag_route(request: Request): 
     with get_connection() as conn:
-        tag = conn.execute(
-            """
-            SELECT id, name
-            FROM tags
-            ORDER BY created_at DESC, id DESC
-            LIMIT 1
-            """
-        ).fetchone()
-
+        tag = fetch_newest_tag(conn)
     return render(request, "newest_tag.html", tag=tag)
 
-@app.post("/tags")
-def create_tag(name: str = Form(...)):
+@app.get("/tags/{tag_id}/edit")
+def edit_tag_route(request: Request, tag_id: int):
     with get_connection() as conn:
-        conn.execute(t"""
-            INSERT INTO tags (name)
-            VALUES ({name})
-            """)
+        tag = fetch_tag_by_id(conn, tag_id)
+    return render(request, "tag_edit.html", tag=tag)
 
+@app.post("/tags")
+def create_tag_route(name: str = Form(...)): 
+    with get_connection() as conn:
+        insert_tag(conn, name)
+    return RedirectResponse("/tags", status_code=303)
+
+@app.post("/tags/{tag_id}/edit")
+def update_tag_route(tag_id: int, name: str = Form(...)): 
+    with get_connection() as conn:
+        update_tag(conn, tag_id, name)
     return RedirectResponse("/tags", status_code=303)
 
 @app.post("/tags/{tag_id}/delete")
-def delete_tag(tag_id: int):
+def delete_tag_route(tag_id: int): 
     with get_connection() as conn:
-        conn.execute(t"DELETE FROM tags WHERE id = {tag_id}")
-
-    return RedirectResponse("/tags", status_code=303)
-
-@app.get("/tags/{tag_id}/edit")
-def show_edit_tag(request: Request, tag_id: int):
-    with get_connection() as conn:
-        tag = conn.execute(
-            t"SELECT id, name FROM tags WHERE id = {tag_id}"
-        ).fetchone()
-
-    return render(request, "tag_edit.html", tag=tag)
-
-@app.post("/tags/{tag_id}/edit")
-def update_tag(tag_id: int, name: str = Form(...)):
-    with get_connection() as conn:
-        conn.execute(t"""
-            UPDATE tags
-            SET name = {name}
-            WHERE id = {tag_id}
-            """)
-
+        delete_tag(conn, tag_id) 
     return RedirectResponse("/tags", status_code=303)

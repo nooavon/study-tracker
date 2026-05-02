@@ -1,11 +1,6 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>Study Tracker</title>
-  </head>
-  <body>
-    <h1>Study Tracker</h1>
+{% extends "base.html" %}
+
+{% block content %}
     <h2>Edit Tag</h2>
 
     <form method="post" action="/tags/{{ tag.id }}/edit">
@@ -14,5 +9,4 @@
 
       <button type="submit">Save</button>
     </form>
-  </body>
-</html>
+{% endblock %}

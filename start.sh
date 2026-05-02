@@ -1,14 +1,14 @@
 #!/bin/sh
-set -eu
+set -e
 
+# 1. Wait for the database to be ready
+echo "Waiting for database..."
 python3 - <<'PY'
 import os
 import time
-
 import psycopg
 
 database_url = os.environ["DATABASE_URL"]
-
 for _ in range(60):
     try:
         with psycopg.connect(database_url):
@@ -19,11 +19,10 @@ else:
     raise SystemExit("Database did not become available in time.")
 PY
 
+# 2. Run migrations (This is what was missing in your logs)
+echo "Running migrations..."
 python3 -m app.migrate
 
-exec python3 -m uvicorn app.main:app \
-  --host 0.0.0.0 \
-  --port 8000 \
-  --reload \
-  --reload-dir /app/app \
-  --reload-dir /app/migrations
+# 3. Start the application
+echo "Starting Uvicorn..."
+exec python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
