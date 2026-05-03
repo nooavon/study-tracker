@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block content %}
+    <h1>{{ card.question }}</h1>
+    <p>{{ card.answer }}</p>
+    <p>
+      Deck:
+      <a href="/decks/{{ card.deck_id }}">{{ card.deck_name }}</a>
+    </p>
+
+    <h2>Tags</h2>
+
+    {% if tags %}
+      <ul>
+        {% for tag in tags %}
+          <li>{{ tag.name }}</li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p>No tags yet.</p>
+    {% endif %}
+
+    {% if available_tags %}
+      <h2>Add tag</h2>
+      <form method="post" action="/cards/{{ card.id }}/tags">
+        <label for="tag_id">Tag</label>
+        <select id="tag_id" name="tag_id">
+          {% for tag in available_tags %}
+            <option value="{{ tag.id }}">{{ tag.name }}</option>
+          {% endfor %}
+        </select>
+
+        <button type="submit">Add tag</button>
+      </form>
+    {% endif %}
+{% endblock %}

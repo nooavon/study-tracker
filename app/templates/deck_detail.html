@@ -17,22 +17,14 @@
 
     <h3>Cards in this Deck</h3>
     {% if cards %}
-      <table border="1">
-        <thead>
-          <tr>
-            <th>Question</th>
-            <th>Answer</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for card in cards %}
-            <tr>
-              <td>{{ card.question }}</td>
-              <td>{{ card.answer }}</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+      <ul>
+        {% for card in cards %}
+          <li>
+            <strong>{{ card.question }}</strong> - {{ card.answer }}
+            | <a href="/cards/{{ card.id }}">View card</a>
+          </li>
+        {% endfor %}
+      </ul>
     {% else %}
       <p>No cards yet.</p>
     {% endif %}

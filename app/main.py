@@ -131,3 +131,76 @@ def delete_tag_route(tag_id: int):
     with get_connection() as conn:
         delete_tag(conn, tag_id) 
     return RedirectResponse("/tags", status_code=303)
+
+@app.get("/cards/{card_id}")
+def show_card(request: Request, card_id: int):
+    with get_connection() as conn:
+        card = conn.execute(
+            """
+            SELECT
+              c.id,
+              c.question,
+              c.answer,
+              d.id AS deck_id,
+              d.name AS deck_name
+            FROM cards AS c
+            INNER JOIN decks AS d ON d.id = c.deck_id
+            WHERE c.id = %s
+            """,
+            (card_id,),
+        ).fetchone()
+
+        if card is None:
+            return RedirectResponse("/decks", status_code=303)
+
+        tags = conn.execute(
+            """
+            SELECT
+              t.id,
+              t.name
+            FROM card_tags AS ct
+            INNER JOIN tags AS t ON t.id = ct.tag_id
+            WHERE ct.card_id = %s
+            ORDER BY t.name
+            """,
+            (card_id,),
+        ).fetchall()
+
+        available_tags = conn.execute(
+            """
+            SELECT
+              t.id,
+              t.name
+            FROM tags AS t
+            WHERE NOT EXISTS (
+              SELECT 1
+              FROM card_tags AS ct
+              WHERE ct.card_id = %s
+                AND ct.tag_id = t.id
+            )
+            ORDER BY t.name
+            """,
+            (card_id,),
+        ).fetchall()
+
+    return render(
+        request,
+        "card_detail.html",
+        card=card,
+        tags=tags,
+        available_tags=available_tags,
+    )
+
+@app.post("/cards/{card_id}/tags")
+def add_tag_to_card(card_id: int, tag_id: int = Form(...)):
+    with get_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO card_tags (card_id, tag_id)
+            VALUES (%s, %s)
+            ON CONFLICT DO NOTHING
+            """,
+            (card_id, tag_id),
+        )
+
+    return RedirectResponse(f"/cards/{card_id}", status_code=303)
