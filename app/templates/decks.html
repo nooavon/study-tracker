@@ -17,6 +17,8 @@
         <li>
           <span><strong>{{ deck.name }}</strong></span> 
           
+          | <a href="/decks/{{ deck.id }}">View deck</a>
+          
           | <a href="/decks/{{ deck.id }}/edit">Edit</a>
           
           <form action="/decks/{{ deck.id }}/delete" method="post" style="display:inline;">

@@ -65,15 +65,15 @@ def get_deck(request: Request, deck_id: int):
             "SELECT * FROM cards WHERE deck_id = %s ORDER BY created_at ASC",
             (deck_id,)
         ).fetchall()
-    return render(request, "deck_details.html", deck=deck, cards=cards)
+    return render(request, "deck_detail.html", deck=deck, cards=cards)
 
 
 @app.post("/decks/{deck_id}/cards")
-def create_card(deck_id: int, front: str = Form(...), back: str = Form(...)):
+def create_card(deck_id: int, question: str = Form(...), answer: str = Form(...)):
     with get_connection() as conn:
         conn.execute(
-            "INSERT INTO cards (deck_id, front, back) VALUES (%s, %s, %s)",
-            (deck_id, front, back),
+            "INSERT INTO cards (deck_id, question, answer) VALUES (%s, %s, %s)",
+            (deck_id, question, answer),
         )
     return RedirectResponse(f"/decks/{deck_id}", status_code=303)
 

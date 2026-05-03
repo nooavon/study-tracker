@@ -1,18 +1,17 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>{{ deck.name }} - Details</title>
-  </head>
-  <body>
-    <h1>{{ deck.name }}</h1>
+{% extends "base.html" %}
+{% block content %}
+    <h2>{{ deck.name }}</h2>
     <p>{{ deck.description }}</p>
-    <a href="/decks">Back to Decks</a>
+    <p><a href="/decks">Back to Decks</a></p>
 
     <h3>Add New Card</h3>
     <form action="/decks/{{ deck.id }}/cards" method="post">
-      <input type="text" name="front" placeholder="Front Side (Question)" required>
-      <input type="text" name="back" placeholder="Back Side (Answer)" required>
+      <label for="question">Question</label>
+      <input type="text" id="question" name="question" required>
+
+      <label for="answer">Answer</label>
+      <input type="text" id="answer" name="answer" required>
+
       <button type="submit">Add Card</button>
     </form>
 
@@ -21,21 +20,20 @@
       <table border="1">
         <thead>
           <tr>
-            <th>Front</th>
-            <th>Back</th>
+            <th>Question</th>
+            <th>Answer</th>
           </tr>
         </thead>
         <tbody>
           {% for card in cards %}
             <tr>
-              <td>{{ card.front }}</td>
-              <td>{{ card.back }}</td>
+              <td>{{ card.question }}</td>
+              <td>{{ card.answer }}</td>
             </tr>
           {% endfor %}
         </tbody>
       </table>
     {% else %}
-      <p>No cards in this deck yet.</p>
+      <p>No cards yet.</p>
     {% endif %}
-  </body>
-</html>
+{% endblock %}
