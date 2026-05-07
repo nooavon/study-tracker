@@ -1,15 +1,21 @@
 # Entity–relationship diagram (study tracker)
 
-This diagram reflects the domain described in [subject-analysis.md](subject-analysis.md) and the tables in [migrations/](../migrations/). The Mermaid figure shows a target union: everything that exists today plus columns and entities a production model would typically add. The Attributes (* vs †) table and cardinality rows spell out what matches migrations (`*`) versus what is proposal only (`†`).
+This diagram reflects the domain described in [subject-analysis.md](subject-analysis.md) and the tables in [migrations/](../migrations/). Sentences that describe only the teaching database use **as-built** or the `*` legend; anything marked **`†`** or called a **proposal** is not in the repo migrations.
 
 **Legend**
 
 - `*` — Matches the current teaching schema (or a relationship that holds without `User`).
 - `†` — Deliberate proposal (tenancy, per-owner uniqueness, link metadata, safer FK deletes in prose). Omit **User**, `owner_user_id`, `linked_at`, and per-owner uniqueness rules to recover the repo schema.
 
+### Scope (what this diagram includes and excludes)
+
+- **In scope:** The four domain entities from the subject analysis — **Deck**, **Card**, **Tag**, and the card–tag association (**CardTag**, table `card_tags`). **Proposal:** **User** and ownership FKs (`†`), shown as a union with the as-built model.
+- **Out of scope:** **Roles** (*Learner*, *System*) are not entity boxes. **System** migration bookkeeping (`schema_migrations` in [app/migrate.py](../app/migrate.py)) is operational, not part of the flashcard vocabulary ER model.
+- **Terminology:** Physical table `card_tags` = associative entity **CardTag** in this document and the Mermaid figure.
+
 ---
 
-## Diagram
+## As-built + proposed union (diagram)
 
 ```mermaid
 erDiagram
@@ -98,6 +104,18 @@ Use this table to see what matches [migrations/](../migrations/) versus what is 
 |-----------|-----------|--------------------|------|
 | **CardTag** | `(card_id, tag_id)` | Yes * | Composite identifier; uniquely identifies one card–tag pair (duplicate application is a no-op at the app layer). |
 | **CardTag** | `linked_at` | No † | When the tag was attached; supports ordering, audit, or “recently tagged” without inferring from other tables. |
+
+---
+
+## Testing the design against these queries
+
+Cross-check against **Likely application queries** in [subject-analysis.md](subject-analysis.md): for each question, the entities and paths below must be enough to express the query. (Whether the app implements it is separate.)
+
+| Query | Entities / path | As-built notes |
+|-------|-----------------|----------------|
+| List all decks A–Z | **Deck** only | Order by `Deck.name`. |
+| Load the “newest” deck | **Deck** only | **Reconstructed from app:** the route orders by `id DESC`. The schema also has `created_at`; “newest” could mean max `id` or max `created_at` — a product should pick one rule. Both attributes sit on **Deck** in the diagram. |
+| All cards that have a given tag (any deck) | **Tag** → **CardTag** → **Card**; join **Deck** if deck title or filtering by owner is needed | **As-built:** fully supported by relationships. **Not implemented** in the current UI/routes. If **User** (`†`) exists, filter decks (or cards via deck) by owner. |
 
 ---
 

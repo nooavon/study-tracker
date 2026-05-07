@@ -2,26 +2,28 @@
 
 **Purpose:** This note reads the repository as a case description: what the domain *is* (entities and links), what users can *do* (actions and implied rules), and what a production system would still need to decide (open questions).
 
+**Package convention:** Unless a sentence is labeled **Proposal** or points to [design-rationale.md](design-rationale.md) / [er-diagram.md](er-diagram.md) for proposed extensions, this note **describes the project as it exists in the repo** (migrations and routes), not a future product.
+
 ---
 
 ## Pass 1 — Candidate entities and relationships
 
-**Entities** (each table in migrations is a candidate aggregate or value in the domain):
+**Domain entities** (four tables in the flashcard vocabulary; each maps to a box in [er-diagram.md](er-diagram.md)):
 
 - **Deck** — A named collection of flashcards. Has a required unique name, optional description, and creation time.
 - **Card** — A question–answer item that belongs to exactly one deck, with its own creation time.
 - **Tag** — A reusable label; has a name and creation time. Not scoped to a deck or user in the schema.
-- **Card tag (association)** — Links one card to one tag; the pair is unique (composite primary key).
+- **Card tag (association)** — Links one card to one tag; the pair is unique (composite primary key). **Terminology:** the physical table is `card_tags`; the ER diagram labels the same structure **CardTag**.
+
+**Roles** (behavioral actors, **not** drawn as entities in the flashcard ER diagram):
+
+- **Learner** — The person using the app; there is no `user_id` or account model, so “who owns this deck?” is not represented.
+- **System** — Applies schema changes and records which migration files ran (`schema_migrations` in [app/migrate.py](../app/migrate.py)); operational bookkeeping, **out of scope** for the content ER diagram in [er-diagram.md](er-diagram.md).
 
 **Relationships** (foreign keys and how they read in the domain):
 
 - **Deck contains many cards** — Every card points at one deck; deleting a deck is defined to cascade removal of its cards at the database level.
 - **Card has many tags; tag applies to many cards** — Many-to-many through the card–tag association table, keyed by card and tag identifiers.
-
-**Roles** (implied, not stored):
-
-- **Learner** — The person using the app; there is no `user_id` or account model, so “who owns this deck?” is not represented.
-- **System** — Applies schema changes and records which migration files ran (operational bookkeeping, not part of the flashcard vocabulary).
 
 ---
 
@@ -37,7 +39,7 @@
 
 - Card **inner join** deck — Card detail always loads the parent deck’s id and name.
 - Card tags **inner join** tag — Resolves tag ids to names for display on a card.
-- Tags **filtered with not exists** Produces “available” tags for the add-tag control without duplicating links already present.
+- Tags **filtered with not exists** — Produces “available” tags for the add-tag control without duplicating links already present.
 
 **Rules**:
 
@@ -48,7 +50,7 @@
 
 ## Pass 3 — Open questions
 
-1. **User** — The schema has no `user_id`. is that intended, or a shortcut?
+1. **User** — The schema has no `user_id`. Is that intended, or a shortcut?
 
 2. **Tag names vs deck names** — Deck names are unique in the database; tag names are not. Should uniqueness be enforced and how should conflicts be shown in the UI?
 
@@ -58,12 +60,24 @@
 
 5. **Query construction discipline** — Tag lookup by id builds the `WHERE` clause with string interpolation instead of a bound parameter. That is safe only while the route always supplies a typed integer; should production code standardize on parameters everywhere?
 
+### Status of open questions
+
+| # | Question | Where it stands |
+|---|----------|-----------------|
+| 1 | User / `user_id` | **Addressed in [design-rationale.md](design-rationale.md):** as-built, no user table; **Proposal** there = `User` (or external identity) plus ownership FKs, aligned with `†` in [er-diagram.md](er-diagram.md). |
+| 2 | Tag vs deck name uniqueness | **Left open** for product/UI (how to show conflicts). **Proposal** in rationale/diagram: per-owner tag uniqueness if accounts exist; deck name uniqueness scope may shift from global to per owner. |
+| 3 | Card lifecycle vs deck/tag | **Left open** (minimal teaching surface vs incomplete product). Mentioned as route-level gap in rationale. |
+| 4 | Deck delete and `card_tags` | **Reconstructed risk** in note and diagram; **Proposal** in rationale/diagram = explicit `ON DELETE` rules (e.g. cascade link rows with cards). |
+| 5 | Query parameterization | **Not an ER issue.** **Left open** as team standard; **Proposal** in rationale = always use bound parameters in application SQL. |
+
 ---
 
 ## Likely application queries
 
-| Query | Status in this project |
+How each query maps onto the ER model is spelled out under **Testing the design against these queries** in [er-diagram.md](er-diagram.md).
 
+| Query | Status in this project |
+|-------|-------------------------|
 | List all decks sorted alphabetically by name | **Implemented** (deck index). |
-| Load the newest deck. | **Implemented** (Newest deck). |
+| Load the newest deck | **Implemented** (newest deck route uses `ORDER BY id DESC LIMIT 1`). |
 | Find all cards (across decks) that carry a given tag, for study or navigation | **Not implemented** — Tags are browsed and attached per card, but there is no cross-deck “study by tag” or search view. |
