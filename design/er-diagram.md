@@ -9,7 +9,7 @@ This diagram reflects the domain described in [subject-analysis.md](subject-anal
 
 ### Scope (what this diagram includes and excludes)
 
-- **In scope:** The four domain entities from the subject analysis — **Deck**, **Card**, **Tag**, and the card–tag association (**CardTag**, table `card_tags`). **Proposal:** **User** and ownership FKs (`†`), shown as a union with the as-built model.
+- **In scope:** The five domain entities from the subject analysis — **Deck**, **Card**, **Tag**, the card–tag association (**CardTag**, table `card_tags`), and **Review** (table `reviews`). **Proposal:** **User** and ownership FKs (`†`), shown as a union with the as-built model.
 - **Out of scope:** **Roles** (*Learner*, *System*) are not entity boxes. **System** migration bookkeeping (`schema_migrations` in [app/migrate.py](../app/migrate.py)) is operational, not part of the flashcard vocabulary ER model.
 - **Terminology:** Physical table `card_tags` = associative entity **CardTag** in this document and the Mermaid figure.
 
@@ -54,11 +54,19 @@ erDiagram
         timestamp linked_at
     }
 
+    Review {
+        serial id PK
+        integer card_id FK
+        integer rating
+        timestamp reviewed_at
+    }
+
     User ||--o{ Deck : owns
     User ||--o{ Tag : defines
     Deck ||--o{ Card : contains
     Card ||--o{ CardTag : tagged_with
     Tag ||--o{ CardTag : applied_via
+    Card ||--o{ Review : received
 ```
 
 ---
@@ -72,8 +80,9 @@ erDiagram
 | **Deck → Card** * | Each deck contains zero or more cards; each card belongs to exactly one deck. |
 | **Card → CardTag** * | Each card may participate in zero or more tag links; each link row refers to exactly one card. |
 | **Tag → CardTag** * | Each tag may appear on zero or more cards via link rows; each link row refers to exactly one tag. |
+| **Card → Review** * | Each card may have zero or more review rows over time; each review belongs to exactly one card. |
 
-Together, **Card** and **Tag** relate **many-to-many** through the explicit associative entity **CardTag** (visible structure in the diagram, not only a named line). **CardTag** has a composite primary key on `(card_id, tag_id)` in the current schema.
+Together, **Card** and **Tag** relate **many-to-many** through the explicit associative entity **CardTag** (visible structure in the diagram, not only a named line). **CardTag** has a composite primary key on `(card_id, tag_id)` in the current schema. **Card** and **Review** relate **one-to-many**: each `reviews` row carries one rating event for one card; deck-level aggregates follow **Deck → Card → Review**.
 
 ---
 
@@ -95,6 +104,8 @@ Use this table to see what matches [migrations/](../migrations/) versus what is 
 | **Tag** | unique `name` | No * | Not enforced today; proposal adds **unique (`owner_user_id`, `name`)** †. |
 | **CardTag** | `card_id`, `tag_id` | Yes * | Composite PK; FKs to **Card** and **Tag** (default `ON DELETE` in DB). |
 | **CardTag** | `linked_at` | No † | Relationship attribute; supports audit or ordering of tag application. |
+| **Review** | `id`, `card_id`, `rating`, `reviewed_at` | Yes * | `card_id` references **Card** with `ON DELETE CASCADE`. `rating` is an integer with **`CHECK` between 1 and 5** inclusive. `reviewed_at` defaults to the row insert time. |
+| **Review** | `user_id` / reviewer | No † | Not in migrations; reviews are anonymous in the teaching schema. |
 
 ---
 
@@ -104,6 +115,8 @@ Use this table to see what matches [migrations/](../migrations/) versus what is 
 |-----------|-----------|--------------------|------|
 | **CardTag** | `(card_id, tag_id)` | Yes * | Composite identifier; uniquely identifies one card–tag pair (duplicate application is a no-op at the app layer). |
 | **CardTag** | `linked_at` | No † | When the tag was attached; supports ordering, audit, or “recently tagged” without inferring from other tables. |
+| **Review** | `id` (surrogate PK) | Yes * | One row per rating event; supports many reviews per card over time. |
+| **Review** | `reviewed_at` | Yes * | When the rating was recorded; supports “most recent review” without inferring from other tables. |
 
 ---
 
@@ -116,6 +129,10 @@ Cross-check against **Likely application queries** in [subject-analysis.md](subj
 | List all decks A–Z | **Deck** only | Order by `Deck.name`. |
 | Load the “newest” deck | **Deck** only | **Reconstructed from app:** the route orders by `id DESC`. The schema also has `created_at`; “newest” could mean max `id` or max `created_at` — a product should pick one rule. Both attributes sit on **Deck** in the diagram. |
 | All cards that have a given tag (any deck) | **Tag** → **CardTag** → **Card**; join **Deck** if deck title or filtering by owner is needed | **As-built:** fully supported by relationships. **Not implemented** in the current UI/routes. If **User** (`†`) exists, filter decks (or cards via deck) by owner. |
+| Review count per card | **Card** → **Review** | Aggregate `COUNT(*)` on **Review** grouped by `card_id`. |
+| Most recent review for a card | **Card** → **Review** | Filter by `card_id`; order by `reviewed_at` descending or take `MAX(reviewed_at)`. |
+| Average rating per deck | **Deck** → **Card** → **Review** | Join cards to reviews; `AVG(rating)` grouped by deck (or deck id). |
+| Cards never reviewed | **Card** left join **Review** | Rows with no matching review, e.g. `LEFT JOIN reviews ON reviews.card_id = cards.id WHERE reviews.id IS NULL`, or `NOT EXISTS` equivalent. |
 
 ---
 
@@ -126,6 +143,7 @@ Cross-check against **Likely application queries** in [subject-analysis.md](subj
 - **`Tag.name` uniqueness** * vs † — Today: **no** `UNIQUE` on `tags.name`. Proposal: **unique tag name per owner** (composite unique with `owner_user_id`).
 - **`CardTag.linked_at`** † — Not in `card_tags`; optional relationship metadata for a real product.
 - **Referential actions on `card_tags`** — Today: FKs to `cards` and `tags` use the default (`NO ACTION`). The note flags risk when deleting decks/cards with existing links; a production design often adds **`ON DELETE CASCADE`** on `card_tags.card_id` (and consistent rules on `tag_id`) so lines in the diagram do not imply orphan links. That is a migration detail rather than a new box on the ER diagram.
+- **`reviews` without `user_id`** * — As-built: ratings are not tied to a **User** row; the **User** box remains **†** only. A production design could add `reviewer_user_id` or similar.
 
 ---
 
@@ -135,5 +153,7 @@ Cross-check against **Likely application queries** in [subject-analysis.md](subj
 2. **“Card and tag are many-to-many through an association.”** — **CardTag** is drawn as its own entity; **Card → CardTag** and **Tag → CardTag** are the two legs.
 3. **“Learner is implied, not stored.”** — In the teaching schema there is **no** `User` row; the **User** box and ownership lines are **†** and labeled as proposals.
 4. **Connections in the app (card–deck join, card–tag join, available tags)** — All are implied by these relationships; no extra edges are required for read paths.
+5. **“Each review belongs to one card; deleting the card drops its reviews.”** — **Card → Review** uses `ON DELETE CASCADE` on `reviews.card_id` in migrations; deleting a **Deck** still cascades to **Card**, which in turn removes dependent reviews.
+6. **Review analytics paths** — Counts, recency, deck averages, and “never reviewed” cards are all expressible with **Review** joined to **Card** (and **Deck** where needed); the teaching app does not expose these in routes yet.
 
-If you strip every **†** field and the **User** entity, the diagram describes only **Deck, Card, Tag, CardTag** as in the current SQL—still with **CardTag** visible as the many-to-many bridge.
+If you strip every **†** field and the **User** entity, the diagram describes only **Deck, Card, Tag, CardTag, Review** as in the current SQL—still with **CardTag** visible as the many-to-many bridge and **Review** as the one-to-many child of **Card**.

@@ -28,6 +28,8 @@ This document explains **why** the domain is shaped the way it is. [subject-anal
 
 **Card tag (association)** — *Reconstructed from code:* the table `card_tags` uses the composite identity `(card_id, tag_id)` as primary key—no separate surrogate. *Proposal:* **keep** that design: the pair *is* the logical identifier of “this tag on this card.” *Optional addition (proposal):* a column such as `linked_at` if the product cares about *when* the link was created (ordering, audit, analytics); the teaching schema omits it.
 
+**Review** — *Reconstructed from migrations:* the table `reviews` stores **append-only rating events** on a card: surrogate `id`, required `card_id`, integer `rating` constrained to **1–5** inclusive, and `reviewed_at` defaulting to insert time. **Why under `cards`:** a review always targets one flashcard; deck-level averages and counts are **derived** by joining **Deck → Card → Review**, which matches “how hard was this item?” better than a single deck-level score with no card anchor. **Why `ON DELETE CASCADE` on `card_id`:** when a card disappears (including because its deck was deleted and cards cascaded), dependent review rows must not outlive the card—no orphan ratings. **Why a `CHECK` on `rating`:** keeps invalid scores out of the database regardless of application bugs; the UI contract stays simple. **Why no `user_id`:** the teaching schema deliberately avoids tying ratings to an account; *proposal:* add `reviewer_user_id` (or opaque subject id) if the product needs attribution, leaderboards, or abuse investigation.
+
 **User** — *Not in the project; proposal:* a `users` table (or external identity provider subject) with surrogate `id` is the usual anchor for ownership and access control. Natural keys like email are poor primary keys (they change); **prefer** surrogate `id` plus unique email/login where needed.
 
 ---
@@ -54,9 +56,9 @@ This document explains **why** the domain is shaped the way it is. [subject-anal
 
 ## Privacy and data minimization (proposal)
 
-*Reconstructed from code:* the teaching app stores **no** user accounts and imposes **no** access rules, so it has nothing to minimize yet.
+*Reconstructed from code:* the teaching app stores **no** user accounts and imposes **no** access rules, so it has nothing to minimize yet. The schema **does** persist **`reviews.reviewed_at`**: timestamps are coarse compared to full session logs, but they still allow “this card was rated at time *t*” without naming *who* rated it.
 
-*Proposal:* a real version should decide explicitly what **not** to persist and what **must** be gated. Do **not** store long-lived **raw IP addresses or full request payloads** tied to study content unless there is a documented need (abuse prevention, legal hold); if logs are required, prefer short retention, aggregation, or hashed identifiers. **Access rule:** every read and write on `decks`, `cards`, `tags`, and `card_tags` should be authorized against an authenticated principal (e.g. “only the owner—or explicitly shared viewers—may read this deck”). That rule is absent today; adding it is as much a product decision as a schema decision.
+*Proposal:* a real version should decide explicitly what **not** to persist and what **must** be gated. Do **not** store long-lived **raw IP addresses or full request payloads** tied to study content unless there is a documented need (abuse prevention, legal hold); if logs are required, prefer short retention, aggregation, or hashed identifiers. **Access rule:** every read and write on `decks`, `cards`, `tags`, `card_tags`, and `reviews` should be authorized against an authenticated principal (e.g. “only the owner—or explicitly shared viewers—may read this deck”). That rule is absent today; adding it is as much a product decision as a schema decision.
 
 ---
 
@@ -64,7 +66,7 @@ This document explains **why** the domain is shaped the way it is. [subject-anal
 
 1. **Tenancy and ownership** — *Reconstructed:* the schema has no `user_id`. *Proposal / left open:* introduce a **`users`** (or workspace) model and foreign keys from `decks` and likely `tags`, or deliberately build a single-tenant, trust-boundary tool (e.g. desktop-only, no server). The code does not say which was intended; a product must choose.
 
-2. **Audit and lifecycle metadata** — *Reconstructed:* cards, decks, and tags have `created_at`; there are **no** `updated_at`, **no** “who changed this,” and **no** soft-delete flags. *Proposal:* a real system usually needs at least **update timestamps and actor** for support and compliance, or a conscious decision to stay minimal.
+2. **Audit and lifecycle metadata** — *Reconstructed:* cards, decks, and tags have `created_at`; review rows carry **`reviewed_at`** for when each rating was stored. There are **no** `updated_at`, **no** “who changed this,” and **no** soft-delete flags on those entities. *Proposal:* a real system usually needs at least **update timestamps and actor** for support and compliance, or a conscious decision to stay minimal.
 
 3. **Referential cleanup** — *Reconstructed:* `cards` cascade when a deck is deleted; `card_tags` uses default FK behavior. *Proposal:* specify **ON DELETE** rules on `card_tags` so deck or card removal does not fail or leave orphans.
 
@@ -80,29 +82,32 @@ The Mermaid figure in [er-diagram.md](er-diagram.md) is a **union** (as-built + 
 - **`Deck.name` shown with UK** — *As-built:* reflects the real **global** `UNIQUE` on `decks.name`. If **User** is added (*proposal*), the meaningful rule usually becomes unique name **per owner**, not globally; the attributes table in the diagram states that shift.
 - **`CardTag.linked_at`** — *Proposal only;* not in `card_tags` today.
 - **Many-to-many drawn as CardTag** — *Reconstructed:* matches table `card_tags`; the diagram name **CardTag** is labeling only.
+- **`Review` and `Card ||--o{ Review`** — *As-built:* matches table `reviews` and the one-to-many from **Card**; not a proposal box.
 
 ---
 
 ## Open question with more than one defensible answer
 
-**Should “study sessions” (or reviews) be a first-class entity?** (*Left open* in the schema and ER diagram; not one of the five subject-analysis bullets.)
+**Should “study sessions” be a first-class header entity?** (Distinct from per-card **Review** rows, which are now in the teaching schema.)
 
-- **One defensible answer: no entity yet** — The app is a **content** catalog (decks, cards, tags). Actual study happens offline or in the user’s head; persisting sessions adds complexity and retention policy without clear value.
+*Reconstructed from migrations:* **`reviews`** implements **append-only per-card rating events** with `reviewed_at`—the “middle path” described in earlier drafts (metrics from events without a mandatory session row). There is still **no** `study_sessions` table.
 
-- **Another defensible answer: yes, add `study_session` (or events)** — If the product goal shifts to **spaced repetition**, progress, or analytics, then sessions or per-card review events become central. You might store start/end time, mode, and outcomes; that touches privacy (how fine-grained is “you studied card 42 at 9:02?”).
+- **One defensible answer: stop at `reviews`** — Enough for counts, averages, recency, and “never reviewed” cards at the SQL layer; the teaching app does not yet expose review CRUD in routes.
 
-- **A middle path:** derive metrics from **append-only review events** without a heavy “session” header row—still a schema and privacy choice.
+- **Another defensible answer: add `study_session` (or equivalent)** — If the product needs a bounded study interval (start/end, mode, device), a header row plus optional links to review events can reduce ambiguity and support UX like “resume where you left off.”
 
-The current project does not force an answer; the diagram and migrations stay silent. Choosing among these is product strategy, not something readable directly from the code.
+- **Privacy tie-in:** fine-grained timestamps on reviews (and even more so on sessions) deserve an explicit retention and attribution policy once identities exist.
+
+*Left open* whether a session entity is worth the complexity for this codebase; **`reviews`** no longer “stay silent” in migrations, but **session** structure still does.
 
 ---
 
 ## What remains open to redesign
 
-Nothing in the teaching schema is sacred for a real product. **`card_tags`** might gain relationship attributes or stricter delete rules; **`tags`** might become user-scoped, shared across a workspace, or a global curated taxonomy; **`decks` / `cards`** might split into “library” vs “instance” if content is reused; a **`users`** table might be replaced by “bring your own identity” with only opaque subject ids. Those forks are **not** prescribed here—only the distinction matters: **reconstruct what the repo does**, then **argue what a serious deployment would still need to decide**.
+Nothing in the teaching schema is sacred for a real product. **`card_tags`** might gain relationship attributes or stricter delete rules; **`tags`** might become user-scoped, shared across a workspace, or a global curated taxonomy; **`decks` / `cards`** might split into “library” vs “instance” if content is reused; **`reviews`** might gain a reviewer FK, soft-delete, or archival partitions; a **`users`** table might be replaced by “bring your own identity” with only opaque subject ids. Those forks are **not** prescribed here—only the distinction matters: **reconstruct what the repo does**, then **argue what a serious deployment would still need to decide**.
 
 ---
 
 ## Reading this with the diagram
 
-Together, [er-diagram.md](er-diagram.md) and this note mean: **solid lines and tables marked `*`** are the teaching database as shipped; **† elements** (User, ownership, `linked_at`, per-owner uniqueness) are **analyst proposals** for a multi-user, production-shaped evolution—not bugs in the assignment. Anyone merging the two documents should see both **what exists** and **what still requires an explicit decision**.
+Together, [er-diagram.md](er-diagram.md) and this note mean: **solid lines and tables marked `*`** are the teaching database as shipped (**Deck**, **Card**, **Tag**, **CardTag**, **Review**); **† elements** (User, ownership, `linked_at`, per-owner uniqueness) are **analyst proposals** for a multi-user, production-shaped evolution—not bugs in the assignment. Anyone merging the two documents should see both **what exists** and **what still requires an explicit decision**.
