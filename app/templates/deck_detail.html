@@ -23,7 +23,6 @@
             <strong>Q:</strong>
             <a href="/cards/{{ card.id }}">{{ card.question }}</a><br/>
             <strong>A:</strong> {{ card.answer }}<br/>
-            | <a href="/cards/{{ card.id }}">View card</a>
             <p>
               {% if (card.review_count | default(0) | int) > 0 %}
                 {{ card.review_count }} review{% if (card.review_count | int) != 1 %}s{% endif %},
