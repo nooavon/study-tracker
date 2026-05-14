@@ -60,13 +60,27 @@ def newest_deck(request: Request):
 @app.get("/decks/{deck_id}")
 def get_deck(request: Request, deck_id: int):
     with get_connection() as conn:
-        deck = conn.execute("SELECT * FROM decks WHERE id = %s", (deck_id,)).fetchone()
+        deck = conn.execute(
+            "SELECT id, name, description FROM decks WHERE id = %s",
+            (deck_id,),
+        ).fetchone()
         cards = conn.execute(
-            "SELECT * FROM cards WHERE deck_id = %s ORDER BY created_at ASC",
-            (deck_id,)
+            """
+            SELECT
+              c.id,
+              c.question,
+              c.answer,
+              COUNT(r.id) AS review_count,
+              ROUND(AVG(r.rating)::numeric, 1) AS average_rating
+            FROM cards AS c
+            LEFT JOIN reviews AS r ON r.card_id = c.id
+            WHERE c.deck_id = %s
+            GROUP BY c.id, c.question, c.answer, c.created_at
+            ORDER BY c.created_at ASC, c.id
+            """,
+            (deck_id,),
         ).fetchall()
     return render(request, "deck_detail.html", deck=deck, cards=cards)
-
 
 @app.post("/decks/{deck_id}/cards")
 def create_card(deck_id: int, question: str = Form(...), answer: str = Form(...)):
@@ -204,3 +218,22 @@ def add_tag_to_card(card_id: int, tag_id: int = Form(...)):
         )
 
     return RedirectResponse(f"/cards/{card_id}", status_code=303)
+
+
+@app.post("/cards/{card_id}/reviews")
+def create_review(card_id: int, rating: int = Form(...)):
+    with get_connection() as conn:
+        card = conn.execute(
+            "SELECT deck_id FROM cards WHERE id = %s",
+            (card_id,),
+        ).fetchone()
+
+        if card is None:
+            return RedirectResponse("/decks", status_code=303)
+
+        conn.execute(
+            "INSERT INTO reviews (card_id, rating) VALUES (%s, %s)",
+            (card_id, rating),
+        )
+
+    return RedirectResponse(f"/decks/{card['deck_id']}", status_code=303)
