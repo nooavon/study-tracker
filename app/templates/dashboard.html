@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Dashboard</h1>
+
+<section class="overview">
+  <p>Total decks: {{ deck_count }}</p>
+  <p>Total cards: {{ card_count }}</p>
+  <p>Total reviews: {{ review_count }}</p>
+  <p>Average rating: {{ average_rating }}</p>
+</section>
+
+<section class="per-deck">
+  <h2>Decks</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Deck</th>
+        <th>Cards</th>
+        <th>Reviews</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for row in per_deck %}
+      <tr>
+        <td>{{ row.name }}</td>
+        <td>{{ row.card_count }}</td>
+        <td>{{ row.review_count }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="recent">
+  <h2>Recent reviews</h2>
+  {% if recent_reviews %}
+    <ul>
+    {% for r in recent_reviews %}
+      <li>{{ r.deck_name }} / {{ r.question }} -- rating {{ r.rating }}</li>
+    {% endfor %}
+    </ul>
+  {% else %}
+    <p>No reviews yet.</p>
+  {% endif %}
+</section>
+{% endblock %}

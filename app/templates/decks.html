@@ -4,10 +4,10 @@
     <form action="/decks" method="post">
       <label for="name">Deck name</label>
       <input type="text" id="name" name="name" required>
-      
+
       <label for="description">Description</label>
       <input type="text" id="description" name="description">
-      
+
       <button type="submit">Create deck</button>
     </form>
 
@@ -15,12 +15,12 @@
     <ul>
       {% for deck in decks %}
         <li>
-          <span><strong>{{ deck.name }}</strong></span> 
-          
+          <span><strong>{{ deck.name }}</strong></span>
+
           | <a href="/decks/{{ deck.id }}">View deck</a>
-          
+
           | <a href="/decks/{{ deck.id }}/edit">Edit</a>
-          
+
           <form action="/decks/{{ deck.id }}/delete" method="post" style="display:inline;">
             <button type="submit">Delete deck</button>
           </form>

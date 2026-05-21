@@ -96,7 +96,7 @@ def create_card(deck_id: int, question: str = Form(...), answer: str = Form(...)
 def edit_deck_route(request: Request, deck_id: int):
     with get_connection() as conn:
         deck = conn.execute(
-            "SELECT id, name, description FROM decks WHERE id = %s", 
+            "SELECT id, name, description FROM decks WHERE id = %s",
             (deck_id,)
         ).fetchone()
     return render(request, "deck_edit.html", deck=deck)
@@ -111,13 +111,13 @@ def update_deck_route(deck_id: int, name: str = Form(...), description: str = Fo
     return RedirectResponse("/decks", status_code=303)
 
 @app.get("/tags")
-def list_tags_route(request: Request): 
+def list_tags_route(request: Request):
     with get_connection() as conn:
         tags = fetch_all_tags(conn)
     return render(request, "tags.html", tags=tags)
 
 @app.get("/tags/newest")
-def newest_tag_route(request: Request): 
+def newest_tag_route(request: Request):
     with get_connection() as conn:
         tag = fetch_newest_tag(conn)
     return render(request, "newest_tag.html", tag=tag)
@@ -129,21 +129,21 @@ def edit_tag_route(request: Request, tag_id: int):
     return render(request, "tag_edit.html", tag=tag)
 
 @app.post("/tags")
-def create_tag_route(name: str = Form(...)): 
+def create_tag_route(name: str = Form(...)):
     with get_connection() as conn:
         insert_tag(conn, name)
     return RedirectResponse("/tags", status_code=303)
 
 @app.post("/tags/{tag_id}/edit")
-def update_tag_route(tag_id: int, name: str = Form(...)): 
+def update_tag_route(tag_id: int, name: str = Form(...)):
     with get_connection() as conn:
         update_tag(conn, tag_id, name)
     return RedirectResponse("/tags", status_code=303)
 
 @app.post("/tags/{tag_id}/delete")
-def delete_tag_route(tag_id: int): 
+def delete_tag_route(tag_id: int):
     with get_connection() as conn:
-        delete_tag(conn, tag_id) 
+        delete_tag(conn, tag_id)
     return RedirectResponse("/tags", status_code=303)
 
 @app.get("/cards/{card_id}")
@@ -237,3 +237,90 @@ def create_review(card_id: int, rating: int = Form(...)):
         )
 
     return RedirectResponse(f"/decks/{card['deck_id']}", status_code=303)
+
+
+@app.get("/dashboard")
+def dashboard(request: Request):
+    with get_connection() as conn:
+        deck_count = conn.execute(
+            "SELECT COUNT(*) AS deck_count FROM decks"
+        ).fetchone()["deck_count"]
+
+        card_count = conn.execute(
+            "SELECT COUNT(*) AS card_count FROM cards"
+        ).fetchone()["card_count"]
+
+        review_count = conn.execute(
+            "SELECT COUNT(*) AS review_count FROM reviews"
+        ).fetchone()["review_count"]
+
+        average_rating = conn.execute(
+            """
+            SELECT COALESCE(ROUND(AVG(rating)::numeric, 2), 0) AS average_rating
+            FROM reviews
+            """
+        ).fetchone()["average_rating"]
+
+        decks = conn.execute(
+            "SELECT id, name FROM decks ORDER BY name"
+        ).fetchall()
+
+        card_counts = {
+            row["deck_id"]: row["card_count"]
+            for row in conn.execute(
+                """
+                SELECT deck_id, COUNT(*) AS card_count
+                FROM cards
+                GROUP BY deck_id
+                """
+            ).fetchall()
+        }
+
+        review_counts = {
+            row["deck_id"]: row["review_count"]
+            for row in conn.execute(
+                """
+                SELECT c.deck_id, COUNT(*) AS review_count
+                FROM cards AS c
+                INNER JOIN reviews AS r ON r.card_id = c.id
+                GROUP BY c.deck_id
+                """
+            ).fetchall()
+        }
+
+        per_deck = [
+            {
+                "id": deck["id"],
+                "name": deck["name"],
+                "card_count": card_counts.get(deck["id"], 0),
+                "review_count": review_counts.get(deck["id"], 0),
+            }
+            for deck in decks
+        ]
+
+        recent_reviews = conn.execute(
+            """
+            SELECT
+              r.id,
+              r.rating,
+              r.reviewed_at,
+              c.question,
+              d.name AS deck_name
+            FROM reviews AS r
+            INNER JOIN cards AS c ON c.id = r.card_id
+            INNER JOIN decks AS d ON d.id = c.deck_id
+            ORDER BY r.reviewed_at DESC
+            LIMIT 10
+            """
+        ).fetchall()
+
+    return render(
+        request,
+        "dashboard.html",
+        deck_count=deck_count,
+        card_count=card_count,
+        review_count=review_count,
+        average_rating=average_rating,
+        per_deck=per_deck,
+        recent_reviews=recent_reviews,
+    )

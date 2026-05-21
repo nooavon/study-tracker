@@ -108,6 +108,18 @@ Nothing in the teaching schema is sacred for a real product. **`card_tags`** mig
 
 ---
 
+## Dashboard aggregates (as-built)
+
+*Reconstructed from code:* `GET /dashboard` answers “how much content exists?” and “what happened lately?” without changing the schema.
+
+- **Global totals** — Four simple `COUNT` / `AVG` queries over `decks`, `cards`, and `reviews` (overall average uses `COALESCE` so an empty `reviews` table shows **0**, not null).
+- **Per-deck rows** — All decks are listed from `decks ORDER BY name`. Card counts and review counts come from **two separate** grouped queries (`cards GROUP BY deck_id`, and `cards` joined to `reviews` grouped by `deck_id`). The route builds a dict per `deck_id` and defaults missing keys to **0**, so a deck with no cards or no reviews still appears with honest zeros rather than being dropped by an inner join.
+- **Recent activity** — The ten latest `reviews` rows, ordered by `reviewed_at DESC`, joined to **Card** and **Deck** for display labels. An empty list renders **No reviews yet.**
+
+*Left open for a production fork:* per-deck **average** rating on the dashboard, filtering by date range, and pagination beyond ten events.
+
+---
+
 ## Reading this with the diagram
 
 Together, [er-diagram.md](er-diagram.md) and this note mean: **solid lines and tables marked `*`** are the teaching database as shipped (**Deck**, **Card**, **Tag**, **CardTag**, **Review**); **† elements** (User, ownership, `linked_at`, per-owner uniqueness) are **analyst proposals** for a multi-user, production-shaped evolution—not bugs in the assignment. Anyone merging the two documents should see both **what exists** and **what still requires an explicit decision**.

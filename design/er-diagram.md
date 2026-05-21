@@ -131,8 +131,10 @@ Cross-check against **Likely application queries** in [subject-analysis.md](subj
 | All cards that have a given tag (any deck) | **Tag** → **CardTag** → **Card**; join **Deck** if deck title or filtering by owner is needed | **As-built:** fully supported by relationships. **Not implemented** in the current UI/routes. If **User** (`†`) exists, filter decks (or cards via deck) by owner. |
 | Review count per card | **Card** → **Review** | Aggregate `COUNT(*)` on **Review** grouped by `card_id`. |
 | Most recent review for a card | **Card** → **Review** | Filter by `card_id`; order by `reviewed_at` descending or take `MAX(reviewed_at)`. |
-| Average rating per deck | **Deck** → **Card** → **Review** | Join cards to reviews; `AVG(rating)` grouped by deck (or deck id). |
-| Cards never reviewed | **Card** left join **Review** | Rows with no matching review, e.g. `LEFT JOIN reviews ON reviews.card_id = cards.id WHERE reviews.id IS NULL`, or `NOT EXISTS` equivalent. |
+| Average rating per deck | **Deck** → **Card** → **Review** | Join cards to reviews; `AVG(rating)` grouped by deck (or deck id). **Not on dashboard** (overall average only there). |
+| Cards never reviewed | **Card** left join **Review** | Rows with no matching review, e.g. `LEFT JOIN reviews ON reviews.card_id = cards.id WHERE reviews.id IS NULL`, or `NOT EXISTS` equivalent. **Partially in app:** deck detail shows “not reviewed yet” per card. |
+| Site-wide totals and per-deck card/review counts | **Deck**, **Card**, **Review** | **Implemented** at `GET /dashboard`: global counts; per-deck counts from separate `GROUP BY` queries merged in the app so empty decks stay visible. |
+| Ten most recent reviews | **Review** → **Card** → **Deck** | **Implemented** at `GET /dashboard` (`ORDER BY reviewed_at DESC LIMIT 10`). |
 
 ---
 
@@ -154,6 +156,6 @@ Cross-check against **Likely application queries** in [subject-analysis.md](subj
 3. **“Learner is implied, not stored.”** — In the teaching schema there is **no** `User` row; the **User** box and ownership lines are **†** and labeled as proposals.
 4. **Connections in the app (card–deck join, card–tag join, available tags)** — All are implied by these relationships; no extra edges are required for read paths.
 5. **“Each review belongs to one card; deleting the card drops its reviews.”** — **Card → Review** uses `ON DELETE CASCADE` on `reviews.card_id` in migrations; deleting a **Deck** still cascades to **Card**, which in turn removes dependent reviews.
-6. **Review analytics paths** — Counts, recency, deck averages, and “never reviewed” cards are all expressible with **Review** joined to **Card** (and **Deck** where needed); the teaching app does not expose these in routes yet.
+6. **Review analytics paths** — Counts, recency, and deck-level rollups are expressible with **Review** joined to **Card** (and **Deck** where needed). The **dashboard** route exposes site-wide totals, per-deck card/review counts, overall average rating, and recent reviews; deck detail still handles per-card averages and “not reviewed yet.”
 
 If you strip every **†** field and the **User** entity, the diagram describes only **Deck, Card, Tag, CardTag, Review** as in the current SQL—still with **CardTag** visible as the many-to-many bridge and **Review** as the one-to-many child of **Card**.

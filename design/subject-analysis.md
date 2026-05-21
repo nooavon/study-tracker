@@ -36,7 +36,8 @@
 - **Decks:** List decks; create a deck; delete a deck; open the most recently created deck (by id); open a deck and see its cards; add a card to a deck; edit a deck’s name and description.
 - **Tags:** List tags; create a tag; open the newest tag; edit or delete a tag.
 - **Cards:** Open a card’s detail (see deck context, tags on the card, and tags not yet on the card); add an existing tag to that card.
-- **Reviews:** The schema supports storing ratings over time on cards (`reviews` table). There are no routes in the teaching app to create, list, or edit reviews; persistence is for data-model and query exercises (same pattern as cross-deck tag search: relationships exist, UI does not).
+- **Reviews:** Rate a card from the deck detail page (1–5); ratings append to `reviews` with a timestamp. There is no route to edit or delete a review.
+- **Dashboard:** Open `/dashboard` for site-wide totals (decks, cards, reviews, overall average rating), a per-deck table of card and review counts (including decks with zero cards or reviews), and the ten most recent reviews (or “No reviews yet.” when empty).
 
 **Connections**:
 
@@ -100,5 +101,8 @@ How each query maps onto the ER model is spelled out under **Testing the design 
 | Find all cards (across decks) that carry a given tag, for study or navigation | **Not implemented** — Tags are browsed and attached per card, but there is no cross-deck “study by tag” or search view. |
 | How many reviews has each card received? | **Not implemented** in routes — Supported by **Card → Review** (`COUNT` grouped by `card_id`). |
 | What is the most recent review for a given card? | **Not implemented** in routes — Supported by filtering `reviews` to one `card_id` and ordering by `reviewed_at` (or `MAX(reviewed_at)`). |
-| What is the average rating per deck? | **Not implemented** in routes — Supported by **Deck → Card → Review** with `AVG(rating)` grouped by deck. |
-| Which cards have not been reviewed yet? | **Not implemented** in routes — Supported by **Card** `LEFT JOIN` **Review** with `WHERE reviews.id IS NULL` (or `NOT EXISTS`). |
+| What is the average rating per deck? | **Partially implemented** — Deck detail shows per-card averages; dashboard shows **overall** average only, not per-deck averages. Per-deck **review counts** are on the dashboard. |
+| Which cards have not been reviewed yet? | **Partially implemented** — Deck detail marks cards with zero reviews; no cross-deck “never reviewed” list. |
+| Site-wide deck, card, and review totals | **Implemented** (`GET /dashboard`). |
+| Per-deck card count and review count (all decks, including empty) | **Implemented** (`GET /dashboard`) — Separate `GROUP BY` queries for card counts and review counts, merged in application code with every deck row. |
+| Ten most recent reviews with deck and card context | **Implemented** (`GET /dashboard`). |
