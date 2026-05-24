@@ -328,60 +328,77 @@ def dashboard(request: Request):
 @app.get("/decks/{deck_id}/study")
 def study_question_view(request: Request, deck_id: int):
     with get_connection() as conn:
-        deck = conn.execute(t"""
-            SELECT id, name FROM decks WHERE id = {deck_id}
-        """).fetchone()
+        deck = conn.execute(
+            "SELECT id, name FROM decks WHERE id = %s",
+            (deck_id,),
+        ).fetchone()
 
         if deck is None:
-            return RedirectResponse(url="/decks", status_code=303)
+            return RedirectResponse("/decks", status_code=303)
 
-        next_card = conn.execute(t"""
+        next_card = conn.execute(
+            """
             SELECT c.id, c.question
             FROM cards AS c
             LEFT JOIN reviews AS r ON r.card_id = c.id
-            WHERE c.deck_id = {deck_id}
+            WHERE c.deck_id = %s
             GROUP BY c.id, c.question
             ORDER BY MAX(reviewed_at) ASC NULLS FIRST, c.id ASC
             LIMIT 1
-        """).fetchone()
+            """,
+            (deck_id,),
+        ).fetchone()
 
     if next_card is None:
         return render(request, "study_empty.html", deck=deck)
 
     return render(request, "study_question.html", deck=deck, card=next_card)
 
+
 @app.get("/cards/{card_id}/study")
 def study_answer_view(request: Request, card_id: int):
     with get_connection() as conn:
-        card = conn.execute(t"""
+        card = conn.execute(
+            """
             SELECT c.id, c.question, c.answer, c.deck_id, d.name AS deck_name
             FROM cards AS c
             INNER JOIN decks AS d ON d.id = c.deck_id
-            WHERE c.id = {card_id}
-        """).fetchone()
+            WHERE c.id = %s
+            """,
+            (card_id,),
+        ).fetchone()
 
     if card is None:
-        return RedirectResponse(url="/decks", status_code=303)
+        return RedirectResponse("/decks", status_code=303)
 
     return render(request, "study_answer.html", card=card)
 
+
 @app.post("/cards/{card_id}/study/review")
 def study_review(card_id: int, rating: int = Form(...)):
+    deck_id = None
     with get_connection() as conn:
         with conn.transaction():
-            card = conn.execute(t"""
-                SELECT deck_id FROM cards WHERE id = {card_id}
-            """).fetchone()
+            card = conn.execute(
+                "SELECT deck_id FROM cards WHERE id = %s",
+                (card_id,),
+            ).fetchone()
 
-            if card is None:
-                return RedirectResponse(url="/decks", status_code=303)
+            if card is not None:
+                deck = conn.execute(
+                    "SELECT id FROM decks WHERE id = %s",
+                    (card["deck_id"],),
+                ).fetchone()
 
-            conn.execute(t"""
-                INSERT INTO reviews (card_id, rating)
-                VALUES ({card_id}, {rating})
-            """)
+                if deck is not None:
+                    deck_id = deck["id"]
+                    conn.execute(
+                        "INSERT INTO reviews (card_id, rating) VALUES (%s, %s)",
+                        (card_id, rating),
+                    )
 
-    return RedirectResponse(
-        url=f"/decks/{card.deck_id}/study", status_code=303
-    )
+    if deck_id is None:
+        return RedirectResponse("/decks", status_code=303)
+
+    return RedirectResponse(f"/decks/{deck_id}/study", status_code=303)
 

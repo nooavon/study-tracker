@@ -19,7 +19,7 @@ else:
     raise SystemExit("Database did not become available in time.")
 PY
 
-# 2. Run migrations (This is what was missing in your logs)
+# 2. Run migrations
 echo "Running migrations..."
 python3 -m app.migrate
 
