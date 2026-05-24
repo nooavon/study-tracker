@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <h1>Studying {{ deck.name }}</h1>
+
+    <div class="study-card">
+    <p><strong>Question:</strong></p>
+    <p>{{ card.question }}</p>
+    </div>
+
+    <p><a href="/cards/{{ card.id }}/study">Show answer</a></p>
+
+    <p><a href="/decks/{{ deck.id }}">Back to deck</a></p>
+{% endblock %}

@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+    <h1>Studying {{ card.deck_name }}</h1>
+
+    <div class="study-card">
+    <p><strong>Question:</strong></p>
+    <p>{{ card.question }}</p>
+
+    <p><strong>Answer:</strong></p>
+    <p>{{ card.answer }}</p>
+    </div>
+
+    <form method="post" action="/cards/{{ card.id }}/study/review">
+    <fieldset>
+        <legend>How well did you remember?</legend>
+        <label><input type="radio" name="rating" value="1" required> 1 (did not remember)</label>
+        <label><input type="radio" name="rating" value="2"> 2</label>
+        <label><input type="radio" name="rating" value="3"> 3</label>
+        <label><input type="radio" name="rating" value="4"> 4</label>
+        <label><input type="radio" name="rating" value="5"> 5 (remembered easily)</label>
+        <button type="submit">Save and next</button>
+    </fieldset>
+    </form>
+
+    <p><a href="/decks/{{ card.deck_id }}">Back to deck without rating</a></p>
+
+{% endblock %}
