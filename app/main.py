@@ -82,7 +82,17 @@ def get_deck(request: Request, deck_id: int):
             """,
             (deck_id,),
         ).fetchall()
-    return render(request, "deck_detail.html", deck=deck, cards=cards)
+        other_decks = conn.execute(
+            "SELECT id, name FROM decks WHERE id <> %s ORDER BY name",
+            (deck_id,),
+        ).fetchall()
+    return render(
+        request,
+        "deck_detail.html",
+        deck=deck,
+        cards=cards,
+        other_decks=other_decks,
+    )
 
 @app.post("/decks/{deck_id}/cards")
 def create_card(deck_id: int, question: str = Form(...), answer: str = Form(...)):
@@ -398,3 +408,32 @@ def study_review(card_id: int, rating: int = Form(..., ge=1, le=5)):
     return RedirectResponse(
         url=f"/decks/{card['deck_id']}/study", status_code=303
     )
+
+@app.post("/cards/{card_id}/move")
+def move_card(card_id: int, target_deck_id: int = Form(...)):
+    redirect_url = "/decks"
+    with get_connection() as conn:
+        with conn.transaction():
+            target_deck = conn.execute(
+                "SELECT id FROM decks WHERE id = %s FOR UPDATE",
+                (target_deck_id,),
+            ).fetchone()
+
+            if target_deck is not None:
+                card = conn.execute(
+                    "SELECT id, deck_id FROM cards WHERE id = %s FOR UPDATE",
+                    (card_id,),
+                ).fetchone()
+
+                if card is None:
+                    redirect_url = "/decks"
+                elif card["deck_id"] == target_deck["id"]:
+                    redirect_url = f"/decks/{card['deck_id']}"
+                else:
+                    conn.execute(
+                        "UPDATE cards SET deck_id = %s WHERE id = %s",
+                        (target_deck_id, card_id),
+                    )
+                    redirect_url = f"/decks/{target_deck_id}"
+
+    return RedirectResponse(redirect_url, status_code=303)

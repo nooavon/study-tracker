@@ -45,6 +45,20 @@
               </label>
               <button type="submit">Save rating</button>
             </form>
+            {% if other_decks %}
+            <form method="post" action="/cards/{{ card.id }}/move">
+              <label>
+                Move to:
+                <select name="target_deck_id" required>
+                  <option value="">--</option>
+                  {% for other_deck in other_decks %}
+                    <option value="{{ other_deck.id }}">{{ other_deck.name }}</option>
+                  {% endfor %}
+                </select>
+              </label>
+              <button type="submit">Move</button>
+            </form>
+            {% endif %}
           </li>
         {% endfor %}
       </ul>
