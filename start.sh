@@ -19,10 +19,13 @@ else:
     raise SystemExit("Database did not become available in time.")
 PY
 
-# 2. Run migrations (This is what was missing in your logs)
+# 2. Run migrations
 echo "Running migrations..."
 python3 -m app.migrate
 
 # 3. Start the application
 echo "Starting Uvicorn..."
-exec python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+if [ "${DEV_RELOAD:-0}" = "1" ]; then
+  exec python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+fi
+exec python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000

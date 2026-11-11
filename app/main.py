@@ -1,5 +1,5 @@
 from .queries.tags import fetch_all_tags, fetch_newest_tag, fetch_tag_by_id, insert_tag, update_tag, delete_tag
-from fastapi import FastAPI, Request, Form
+from fastapi import FastAPI, HTTPException, Request, Form
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 
@@ -64,6 +64,8 @@ def get_deck(request: Request, deck_id: int):
             "SELECT id, name, description FROM decks WHERE id = %s",
             (deck_id,),
         ).fetchone()
+        if deck is None:
+            raise HTTPException(status_code=404, detail="Deck not found")
         cards = conn.execute(
             """
             SELECT
@@ -99,6 +101,8 @@ def edit_deck_route(request: Request, deck_id: int):
             "SELECT id, name, description FROM decks WHERE id = %s",
             (deck_id,)
         ).fetchone()
+    if deck is None:
+        raise HTTPException(status_code=404, detail="Deck not found")
     return render(request, "deck_edit.html", deck=deck)
 
 @app.post("/decks/{deck_id}/edit")
@@ -126,6 +130,8 @@ def newest_tag_route(request: Request):
 def edit_tag_route(request: Request, tag_id: int):
     with get_connection() as conn:
         tag = fetch_tag_by_id(conn, tag_id)
+    if tag is None:
+        raise HTTPException(status_code=404, detail="Tag not found")
     return render(request, "tag_edit.html", tag=tag)
 
 @app.post("/tags")
@@ -165,7 +171,7 @@ def show_card(request: Request, card_id: int):
         ).fetchone()
 
         if card is None:
-            return RedirectResponse("/decks", status_code=303)
+            raise HTTPException(status_code=404, detail="Card not found")
 
         tags = conn.execute(
             """
@@ -229,7 +235,7 @@ def create_review(card_id: int, rating: int = Form(...)):
         ).fetchone()
 
         if card is None:
-            return RedirectResponse("/decks", status_code=303)
+            raise HTTPException(status_code=404, detail="Card not found")
 
         conn.execute(
             "INSERT INTO reviews (card_id, rating) VALUES (%s, %s)",
@@ -328,60 +334,67 @@ def dashboard(request: Request):
 @app.get("/decks/{deck_id}/study")
 def study_question_view(request: Request, deck_id: int):
     with get_connection() as conn:
-        deck = conn.execute(t"""
-            SELECT id, name FROM decks WHERE id = {deck_id}
-        """).fetchone()
+        deck = conn.execute(
+            "SELECT id, name FROM decks WHERE id = %s", (deck_id,)
+        ).fetchone()
 
         if deck is None:
-            return RedirectResponse(url="/decks", status_code=303)
+            raise HTTPException(status_code=404, detail="Deck not found")
 
-        next_card = conn.execute(t"""
+        # Least recently reviewed card first; never-reviewed cards come first.
+        next_card = conn.execute(
+            """
             SELECT c.id, c.question
             FROM cards AS c
             LEFT JOIN reviews AS r ON r.card_id = c.id
-            WHERE c.deck_id = {deck_id}
+            WHERE c.deck_id = %s
             GROUP BY c.id, c.question
-            ORDER BY MAX(reviewed_at) ASC NULLS FIRST, c.id ASC
+            ORDER BY MAX(r.reviewed_at) ASC NULLS FIRST, c.id ASC
             LIMIT 1
-        """).fetchone()
+            """,
+            (deck_id,),
+        ).fetchone()
 
     if next_card is None:
         return render(request, "study_empty.html", deck=deck)
 
     return render(request, "study_question.html", deck=deck, card=next_card)
 
+
 @app.get("/cards/{card_id}/study")
 def study_answer_view(request: Request, card_id: int):
     with get_connection() as conn:
-        card = conn.execute(t"""
+        card = conn.execute(
+            """
             SELECT c.id, c.question, c.answer, c.deck_id, d.name AS deck_name
             FROM cards AS c
             INNER JOIN decks AS d ON d.id = c.deck_id
-            WHERE c.id = {card_id}
-        """).fetchone()
+            WHERE c.id = %s
+            """,
+            (card_id,),
+        ).fetchone()
 
     if card is None:
-        return RedirectResponse(url="/decks", status_code=303)
+        raise HTTPException(status_code=404, detail="Card not found")
 
     return render(request, "study_answer.html", card=card)
 
+
 @app.post("/cards/{card_id}/study/review")
-def study_review(card_id: int, rating: int = Form(...)):
+def study_review(card_id: int, rating: int = Form(..., ge=1, le=5)):
     with get_connection() as conn:
-        with conn.transaction():
-            card = conn.execute(t"""
-                SELECT deck_id FROM cards WHERE id = {card_id}
-            """).fetchone()
+        card = conn.execute(
+            "SELECT deck_id FROM cards WHERE id = %s", (card_id,)
+        ).fetchone()
 
-            if card is None:
-                return RedirectResponse(url="/decks", status_code=303)
+        if card is None:
+            raise HTTPException(status_code=404, detail="Card not found")
 
-            conn.execute(t"""
-                INSERT INTO reviews (card_id, rating)
-                VALUES ({card_id}, {rating})
-            """)
+        conn.execute(
+            "INSERT INTO reviews (card_id, rating) VALUES (%s, %s)",
+            (card_id, rating),
+        )
 
     return RedirectResponse(
-        url=f"/decks/{card.deck_id}/study", status_code=303
+        url=f"/decks/{card['deck_id']}/study", status_code=303
     )
-

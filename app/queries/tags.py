@@ -10,7 +10,8 @@ def fetch_newest_tag(conn):
 
 def fetch_tag_by_id(conn, tag_id):
     return conn.execute(
-        f"SELECT id, name FROM tags WHERE id = {tag_id}",
+        "SELECT id, name FROM tags WHERE id = %s",
+        (tag_id,),
     ).fetchone()
 
 def insert_tag(conn, name):

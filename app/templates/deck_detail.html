@@ -2,7 +2,7 @@
 {% block content %}
     <h2>{{ deck.name }}</h2>
     <p>{{ deck.description }}</p>
-    <p><a href="/decks">Back to Decks</a></p>
+    <p><a href="/decks">Back to Decks</a> | <a href="/decks/{{ deck.id }}/study">Study this deck</a></p>
 
     <h3>Add New Card</h3>
     <form action="/decks/{{ deck.id }}/cards" method="post">
